@@ -1,0 +1,32 @@
+export default async function handler(req, res) {
+  // 👇 المفاتيح تحفظ في إعدادات Vercel كـ Environment Variables
+  const MASTER_KEY = process.env.MASTER_KEY;
+  const ORDERS_BIN_ID = "68d8d771ae596e708ffe519f";
+  const AFFILIATES_BIN_ID = "68d8db74d0ea881f408d8cea";
+  const UNTITLED_BIN_ID = "68d561bd43b1c97be94fc628";
+
+  const allowedOrigins = [
+    "https://www.zoonasd.com",
+    "https://zoonasd.com",
+    "https://afraa-market.blogspot.com"
+  ];
+
+  const origin = req.headers.origin || "";
+  if (!allowedOrigins.includes(origin)) {
+    return res.status(403).json({ error: "Forbidden origin", origin });
+  }
+
+  const type = req.query.type;
+  let bin;
+  if (type === "orders") bin = ORDERS_BIN_ID;
+  else if (type === "affiliates") bin = AFFILIATES_BIN_ID;
+  else bin = UNTITLED_BIN_ID;
+
+  const r = await fetch(https://api.jsonbin.io/v3/b/${bin}/latest, {
+    headers: { "X-Master-Key": MASTER_KEY, "Accept": "application/json" }
+  });
+
+  const data = await r.json();
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.status(r.status).json(data);
+}
