@@ -29,9 +29,15 @@ export default async function handler(req, res) {
       const response = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
         headers: { "X-Master-Key": API_KEY },
       });
+      
+      if (!response.ok) {
+        throw new Error(`JSONBin API returned ${response.status}`);
+      }
+      
       const data = await response.json();
       return res.status(200).json(data);
     } catch (error) {
+      console.error("Error fetching data:", error);
       return res.status(500).json({ message: "Error fetching data", error: error.message });
     }
   }
@@ -39,9 +45,9 @@ export default async function handler(req, res) {
   // POST: إضافة بيانات جديدة بعد التحقق من reCAPTCHA
   if (req.method === "POST") {
     try {
-      const { name, token } = req.body;
+      const { name, deviceId, token } = req.body;
 
-      if (!name || !token) {
+      if (!name || !token || !deviceId) {
         return res.status(400).json({ message: "البيانات غير مكتملة" });
       }
 
@@ -54,9 +60,11 @@ export default async function handler(req, res) {
           body: `secret=${RECAPTCHA_SECRET}&response=${token}`,
         }
       );
+      
       const captchaData = await captchaRes.json();
 
       if (!captchaData.success) {
+        console.error("reCAPTCHA verification failed:", captchaData);
         return res.status(403).json({ message: "فشل التحقق من reCAPTCHA" });
       }
 
@@ -64,11 +72,28 @@ export default async function handler(req, res) {
       const fetchRes = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
         headers: { "X-Master-Key": API_KEY },
       });
+      
+      if (!fetchRes.ok) {
+        throw new Error(`JSONBin API returned ${fetchRes.status}`);
+      }
+      
       const fetchData = await fetchRes.json();
       const votes = fetchData.record?.votes || [];
 
+      // التحقق من الحد الأقصى للتسجيلات لهذا الجهاز
+      const deviceVoteCount = votes.filter(vote => vote.deviceId === deviceId).length;
+      const MAX_VOTES_PER_DEVICE = 10;
+      
+      if (deviceVoteCount >= MAX_VOTES_PER_DEVICE) {
+        return res.status(403).json({ message: "لقد بلغت الحد الأقصى لمرات التسجيل" });
+      }
+
       // إضافة الاسم الجديد
-      votes.push({ name, time: new Date().toISOString() });
+      votes.push({ 
+        name, 
+        deviceId,
+        time: new Date().toISOString() 
+      });
 
       // تحديث البيانات في JSONBin
       const updateRes = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
@@ -80,10 +105,15 @@ export default async function handler(req, res) {
         body: JSON.stringify({ votes }),
       });
 
+      if (!updateRes.ok) {
+        throw new Error(`JSONBin API returned ${updateRes.status}`);
+      }
+
       const updatedData = await updateRes.json();
       return res.status(200).json(updatedData);
 
     } catch (error) {
+      console.error("Error updating data:", error);
       return res.status(500).json({ message: "Error updating data", error: error.message });
     }
   }
