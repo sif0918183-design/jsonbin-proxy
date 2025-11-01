@@ -1,5 +1,4 @@
 export default async function handler(req, res) {
-  // النطاقات المصرح لها
   const ALLOWED_ORIGINS = [
     "https://aljazeera-leb.blogspot.com",
     "https://www.aljazeera-leb.blogspot.com",
@@ -7,26 +6,24 @@ export default async function handler(req, res) {
 
   const origin = req.headers.origin;
 
-  // إعداد ترويسات CORS
   res.setHeader(
     "Access-Control-Allow-Origin",
     ALLOWED_ORIGINS.includes(origin) ? origin : "null"
   );
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  // معالجة طلب OPTIONS
   if (req.method === "OPTIONS") return res.status(200).end();
 
-  // منع الوصول من نطاقات غير مصرح بها
   if (!ALLOWED_ORIGINS.includes(origin)) {
     return res.status(403).json({ message: "Access denied: Unauthorized origin" });
   }
 
   const API_KEY = process.env.JSONBIN_SECRET_KEY;
   const BIN_ID = process.env.JSONBIN_BIN_ID;
+  const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET_KEY;
 
-  // GET request: قراءة البيانات
+  // GET: قراءة البيانات
   if (req.method === "GET") {
     try {
       const response = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
@@ -39,7 +36,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // POST request: إضافة بيانات جديدة مع التحقق من reCAPTCHA
+  // POST: إضافة بيانات جديدة بعد التحقق من reCAPTCHA
   if (req.method === "POST") {
     try {
       const { name, token } = req.body;
@@ -48,30 +45,27 @@ export default async function handler(req, res) {
         return res.status(400).json({ message: "البيانات غير مكتملة" });
       }
 
-      // التحقق من reCAPTCHA مع Google
-      const secretKey = process.env.RECAPTCHA_SECRET_KEY; // المفتاح السري
+      // تحقق reCAPTCHA مع Google
       const captchaRes = await fetch(
         `https://www.google.com/recaptcha/api/siteverify`,
         {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: `secret=${secretKey}&response=${token}`,
+          body: `secret=${RECAPTCHA_SECRET}&response=${token}`,
         }
       );
       const captchaData = await captchaRes.json();
 
       if (!captchaData.success) {
-        return res.status(403).json({
-          message: "فشل التحقق من reCAPTCHA. تأكد أنك لست روبوت.",
-        });
+        return res.status(403).json({ message: "فشل التحقق من reCAPTCHA" });
       }
 
       // قراءة البيانات الحالية من JSONBin
-      const response = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+      const fetchRes = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
         headers: { "X-Master-Key": API_KEY },
       });
-      const data = await response.json();
-      const votes = data.record?.votes || [];
+      const fetchData = await fetchRes.json();
+      const votes = fetchData.record?.votes || [];
 
       // إضافة الاسم الجديد
       votes.push({ name, time: new Date().toISOString() });
@@ -85,8 +79,8 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify({ votes }),
       });
-      const updatedData = await updateRes.json();
 
+      const updatedData = await updateRes.json();
       return res.status(200).json(updatedData);
 
     } catch (error) {
@@ -94,6 +88,5 @@ export default async function handler(req, res) {
     }
   }
 
-  // إذا كان نوع الطلب غير مدعوم
   return res.status(405).json({ message: "Method not allowed" });
 }
