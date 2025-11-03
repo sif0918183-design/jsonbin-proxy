@@ -1,7 +1,7 @@
 export default async function handler(req, res) {
   const ALLOWED_ORIGINS = [
-    "https://aljazeera-leb.blogspot.com",
-    "https://www.aljazeera-leb.blogspot.com",
+    "https://aljazeera-sd.blogspot.com",
+    "https://www.aljazeera-sd.blogspot.com",
   ];
 
   const origin = req.headers.origin;
